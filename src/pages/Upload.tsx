@@ -63,8 +63,10 @@ const Upload: React.FC = () => {
     setLoading(true);
     const formData = new FormData();
     formData.append('image', file);
+    const BACKEND_URL =
+      import.meta.env.VITE_BACKEND_URL || 'http://localhost:3003';
     try {
-      const response = await fetch('http://localhost:3001/api/upload-image', {
+      const response = await fetch(`${BACKEND_URL}/api/upload-image`, {
         method: 'POST',
         body: formData
       });
