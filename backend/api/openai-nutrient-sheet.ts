@@ -5,11 +5,8 @@ import OpenAI from 'openai';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers for Netlify frontend (set for every response)
-  res.setHeader(
-    'Access-Control-Allow-Origin',
-    'https://ai-foodsnap.netlify.app'
-  );
+  // CORS headers for debugging (allow all origins)
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   if (req.method === 'OPTIONS') {
