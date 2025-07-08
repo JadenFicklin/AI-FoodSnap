@@ -13,7 +13,9 @@ const port = process.env.PORT || 3003;
 
 const upload = multer({ dest: 'uploads/' });
 
-app.use(cors({ origin: 'http://localhost:5173' }));
+app.use(
+  cors({ origin: ['http://localhost:5173', 'https://ai-foodsnap.netlify.app'] })
+);
 app.use(express.json());
 
 app.get('/', (req: any, res: any) => {
