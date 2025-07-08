@@ -2,29 +2,6 @@ import React, { useState, useRef } from 'react';
 import { getNutrientSheet } from '../features/nutrientSheet/openaiNutrientService';
 import NutrientSheet from '../features/nutrientSheet/NutrientSheet';
 
-function parseNutrition(raw: string | object) {
-  if (typeof raw === 'object' && raw !== null) return raw;
-  if (typeof raw !== 'string') return null;
-  // Remove markdown code block if present
-  const cleaned = raw.replace(/^```json|```$/gim, '').trim();
-  try {
-    return JSON.parse(cleaned);
-  } catch {
-    return null;
-  }
-}
-
-function normalizeNutrition(nutrition: any) {
-  if (!nutrition) return nutrition;
-  return {
-    food: nutrition.food || nutrition.foodName || 'N/A',
-    estimated_calories:
-      nutrition.estimated_calories || nutrition.estimatedCalories || 'N/A',
-    macronutrients: nutrition.macronutrients || {},
-    micronutrients: nutrition.micronutrients || {}
-  };
-}
-
 function parseFoods(raw: string | object) {
   if (Array.isArray(raw)) return raw;
   if (typeof raw === 'object' && raw !== null) return [raw];
