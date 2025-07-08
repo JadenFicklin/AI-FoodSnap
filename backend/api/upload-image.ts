@@ -85,7 +85,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         console.log('OpenAI API response received');
         let foods: any;
         try {
-          foods = JSON.parse(completion.choices[0].message?.content || '[]');
+          let content = completion.choices[0].message?.content || '[]';
+          // Remove code block markers if present
+          content = content.replace(/```json|```/g, '').trim();
+          foods = JSON.parse(content);
           console.log('Parsed foods:', foods);
         } catch (e) {
           console.log('Error parsing OpenAI response:', e);
