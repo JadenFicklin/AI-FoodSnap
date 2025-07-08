@@ -1,4 +1,6 @@
 import React, { useState, useRef } from 'react';
+import { getNutrientSheet } from '../features/nutrientSheet/openaiNutrientService';
+import NutrientSheet from '../features/nutrientSheet/NutrientSheet';
 
 function parseNutrition(raw: string | object) {
   if (typeof raw === 'object' && raw !== null) return raw;
@@ -23,11 +25,28 @@ function normalizeNutrition(nutrition: any) {
   };
 }
 
+function parseFoods(raw: string | object) {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'object' && raw !== null) return [raw];
+  if (typeof raw !== 'string') return [];
+  // Remove markdown code block if present
+  const cleaned = raw.replace(/^```json|```$/gim, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return [];
+  }
+}
+
 const Upload: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
-  const [nutrition, setNutrition] = useState<any>(null);
+  const [foods, setFoods] = useState<any[]>([]);
+  const [sheetLoading, setSheetLoading] = useState(false);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [nutrientSheet, setNutrientSheet] = useState<any>(null);
+  const [nutrientSheetRaw, setNutrientSheetRaw] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,7 +78,7 @@ const Upload: React.FC = () => {
     e.preventDefault();
     setError(null);
     setResult(null);
-    setNutrition(null);
+    setFoods([]);
     if (!file) {
       setError('Please select an image.');
       return;
@@ -74,19 +93,35 @@ const Upload: React.FC = () => {
       });
       const data = await response.json();
       setResult(data);
-      // Try to parse nutrition info
-      let nutritionData = null;
-      if (data.analysis) {
-        nutritionData = data.analysis;
-        if (nutritionData.raw) {
-          nutritionData = parseNutrition(nutritionData.raw);
-        }
+      // Foods array from backend
+      let foodsData = [];
+      if (Array.isArray(data.foods)) {
+        foodsData = data.foods;
+      } else if (data.foods && data.foods.raw) {
+        foodsData = parseFoods(data.foods.raw);
       }
-      setNutrition(normalizeNutrition(nutritionData));
+      setFoods(foodsData);
     } catch (err) {
       setError('An error occurred while uploading.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerateSheet = async () => {
+    setSheetError(null);
+    setSheetLoading(true);
+    setNutrientSheet(null);
+    setNutrientSheetRaw(null);
+    try {
+      const result = await getNutrientSheet(foods);
+      console.log('Nutrient sheet response:', result);
+      setNutrientSheet(result);
+      setNutrientSheetRaw(result);
+    } catch (err) {
+      setSheetError('Failed to generate nutrient sheet.');
+    } finally {
+      setSheetLoading(false);
     }
   };
 
@@ -132,73 +167,43 @@ const Upload: React.FC = () => {
         </button>
       </form>
       {error && <div className="text-red-500 mt-4">{String(error)}</div>}
-      {nutrition && (
+      {foods && foods.length > 0 && (
         <div className="mt-6 w-full max-w-md">
-          <div className="p-4 rounded shadow bg-white border mb-4">
-            <h2 className="font-semibold text-lg mb-2">Nutrition Summary</h2>
-            <div className="mb-2">
-              <span className="font-bold">Food:</span> {nutrition.food || 'N/A'}
-            </div>
-            <div className="mb-2">
-              <span className="font-bold">Estimated Calories:</span>{' '}
-              {nutrition.estimated_calories || 'N/A'}
-            </div>
-            <div className="mb-2">
-              <span className="font-bold">Macronutrients:</span>
-              <ul className="list-disc list-inside ml-4">
-                {nutrition.macronutrients &&
-                  Object.entries(nutrition.macronutrients).map(([k, v]) => (
-                    <li key={k}>
-                      <span className="capitalize">{k}:</span> {String(v)}
-                    </li>
-                  ))}
-              </ul>
-            </div>
-            {nutrition.micronutrients && (
-              <div className="mb-2">
-                <span className="font-bold">Micronutrients:</span>
-                <ul className="list-disc list-inside ml-4">
-                  {Object.entries(nutrition.micronutrients).map(([k, v]) => (
-                    <li key={k}>
-                      <span className="capitalize">{k}:</span> {String(v)}
-                    </li>
-                  ))}
-                </ul>
+          <h2 className="font-semibold text-lg mb-4">Detected Foods</h2>
+          <div className="grid grid-cols-1 gap-4">
+            {foods.map((item, idx) => (
+              <div
+                key={idx}
+                className="bg-white border rounded shadow p-4 flex flex-col items-center">
+                <span className="text-xl font-bold mb-2 capitalize">
+                  {item.food}
+                </span>
+                <span className="text-gray-700 text-lg">
+                  {item.grams} grams
+                </span>
               </div>
-            )}
+            ))}
           </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border rounded shadow">
-              <thead>
-                <tr>
-                  <th className="px-4 py-2 border">Food</th>
-                  <th className="px-4 py-2 border">Calories</th>
-                  <th className="px-4 py-2 border">Protein</th>
-                  <th className="px-4 py-2 border">Carbs</th>
-                  <th className="px-4 py-2 border">Fat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="px-4 py-2 border">
-                    {nutrition.food || 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 border">
-                    {nutrition.estimated_calories || 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 border">
-                    {nutrition.macronutrients?.protein || 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 border">
-                    {nutrition.macronutrients?.carbohydrates || 'N/A'}
-                  </td>
-                  <td className="px-4 py-2 border">
-                    {nutrition.macronutrients?.fat || 'N/A'}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <button
+            className="mt-6 bg-green-600 text-white px-4 py-2 rounded w-full font-semibold"
+            onClick={handleGenerateSheet}
+            disabled={sheetLoading}>
+            {sheetLoading
+              ? 'Generating Nutrient Sheet...'
+              : 'Generate Nutrient Sheet'}
+          </button>
+          {sheetError && <div className="text-red-500 mt-2">{sheetError}</div>}
+        </div>
+      )}
+      {nutrientSheet && <NutrientSheet data={nutrientSheet} />}
+      {nutrientSheetRaw && (
+        <div className="mt-4 p-4 border rounded bg-yellow-50 w-full max-w-2xl mx-auto">
+          <h2 className="font-semibold mb-2 text-yellow-800">
+            Nutrient Sheet Raw Response:
+          </h2>
+          <pre className="text-xs whitespace-pre-wrap text-yellow-900">
+            {JSON.stringify(nutrientSheetRaw, null, 2)}
+          </pre>
         </div>
       )}
       {result && (
