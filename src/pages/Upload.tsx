@@ -1,6 +1,8 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { getNutrientSheet } from '../features/nutrientSheet/openaiNutrientService';
 import NutrientSheet from '../features/nutrientSheet/NutrientSheet';
+import { useAuth } from '../contexts/AuthContext';
+import { getUserData } from '../services/firebase';
 
 function parseFoods(raw: string | object) {
   if (Array.isArray(raw)) return raw;
@@ -16,6 +18,7 @@ function parseFoods(raw: string | object) {
 }
 
 const Upload: React.FC = () => {
+  const { user, logout, deleteAccount } = useAuth();
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
@@ -26,6 +29,8 @@ const Upload: React.FC = () => {
   const [nutrientSheetRaw, setNutrientSheetRaw] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -105,77 +110,131 @@ const Upload: React.FC = () => {
     }
   };
 
+  // Fetch user data when component mounts
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (user?.uid) {
+        const data = await getUserData(user.uid);
+        setUserData(data);
+      }
+    };
+    fetchUserData();
+  }, [user]);
+
+  const handleDeleteAccount = async () => {
+    if (
+      window.confirm(
+        'Are you sure you want to delete your account? This action cannot be undone.'
+      )
+    ) {
+      try {
+        await deleteAccount();
+        // User will be automatically redirected to login page
+      } catch (error) {
+        console.error('Error deleting account:', error);
+        alert('Failed to delete account. Please try again.');
+      }
+    }
+  };
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen p-4 bg-gray-50">
-      <h1 className="text-2xl font-bold mb-4">Upload Food Image</h1>
-      <form
-        onSubmit={handleSubmit}
-        className="flex flex-col items-center gap-4 w-full max-w-md">
-        <div
-          className={`w-full h-48 border-2 border-dashed rounded flex flex-col items-center justify-center cursor-pointer transition-colors ${
-            file
-              ? 'border-green-400 bg-green-50'
-              : 'border-gray-300 bg-white hover:bg-gray-100'
-          }`}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onClick={handleClick}>
-          {preview ? (
-            <img
-              src={preview}
-              alt="Preview"
-              className="max-h-40 object-contain"
-            />
-          ) : (
-            <span className="text-gray-400">
-              Drag & drop an image here, or click to select
+    <div className="min-h-screen bg-gray-50">
+      {/* Header with user info and logout */}
+      <div className="bg-white shadow-sm border-b px-4 py-3">
+        <div className="max-w-4xl mx-auto flex justify-between items-center">
+          <h1 className="text-xl font-semibold text-gray-900">AI Food Snap</h1>
+          <div className="flex items-center gap-4">
+            <span className="text-sm text-gray-600">
+              Welcome, {userData?.username || user?.email}
             </span>
-          )}
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            ref={fileInputRef}
-            className="hidden"
-          />
+            <button
+              onClick={logout}
+              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors">
+              Logout
+            </button>
+            <button
+              onClick={handleDeleteAccount}
+              className="px-3 py-1 text-sm text-red-600 hover:text-red-700 hover:bg-red-50 rounded-md transition-colors border border-red-200">
+              Delete Account
+            </button>
+          </div>
         </div>
-        <button
-          type="submit"
-          className="bg-blue-500 text-white px-4 py-2 rounded w-full"
-          disabled={loading}>
-          {loading ? 'Uploading...' : 'Upload'}
-        </button>
-      </form>
-      {error && <div className="text-red-500 mt-4">{String(error)}</div>}
-      {foods && foods.length > 0 && (
-        <div className="mt-6 w-full max-w-md">
-          <h2 className="font-semibold text-lg mb-4">Detected Foods</h2>
-          <div className="grid grid-cols-1 gap-4">
-            {foods.map((item, idx) => (
-              <div
-                key={idx}
-                className="bg-white border rounded shadow p-4 flex flex-col items-center">
-                <span className="text-xl font-bold mb-2 capitalize">
-                  {item.food}
-                </span>
-                <span className="text-gray-700 text-lg">
-                  {item.grams} grams
-                </span>
-              </div>
-            ))}
+      </div>
+
+      {/* Main content */}
+      <div className="flex flex-col items-center justify-center p-4">
+        <h2 className="text-2xl font-bold mb-4">Upload Food Image</h2>
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col items-center gap-4 w-full max-w-md">
+          <div
+            className={`w-full h-48 border-2 border-dashed rounded flex flex-col items-center justify-center cursor-pointer transition-colors ${
+              file
+                ? 'border-green-400 bg-green-50'
+                : 'border-gray-300 bg-white hover:bg-gray-100'
+            }`}
+            onDrop={handleDrop}
+            onDragOver={handleDragOver}
+            onClick={handleClick}>
+            {preview ? (
+              <img
+                src={preview}
+                alt="Preview"
+                className="max-h-40 object-contain"
+              />
+            ) : (
+              <span className="text-gray-400">
+                Drag & drop an image here, or click to select
+              </span>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              ref={fileInputRef}
+              className="hidden"
+            />
           </div>
           <button
-            className="mt-6 bg-green-600 text-white px-4 py-2 rounded w-full font-semibold"
-            onClick={handleGenerateSheet}
-            disabled={sheetLoading}>
-            {sheetLoading
-              ? 'Generating Nutrient Sheet...'
-              : 'Generate Nutrient Sheet'}
+            type="submit"
+            className="bg-blue-500 text-white px-4 py-2 rounded w-full"
+            disabled={loading}>
+            {loading ? 'Uploading...' : 'Upload'}
           </button>
-          {sheetError && <div className="text-red-500 mt-2">{sheetError}</div>}
-        </div>
-      )}
-      {nutrientSheet && <NutrientSheet data={nutrientSheet} />}
+        </form>
+        {error && <div className="text-red-500 mt-4">{String(error)}</div>}
+        {foods && foods.length > 0 && (
+          <div className="mt-6 w-full max-w-md">
+            <h2 className="font-semibold text-lg mb-4">Detected Foods</h2>
+            <div className="grid grid-cols-1 gap-4">
+              {foods.map((item, idx) => (
+                <div
+                  key={idx}
+                  className="bg-white border rounded shadow p-4 flex flex-col items-center">
+                  <span className="text-xl font-bold mb-2 capitalize">
+                    {item.food}
+                  </span>
+                  <span className="text-gray-700 text-lg">
+                    {item.grams} grams
+                  </span>
+                </div>
+              ))}
+            </div>
+            <button
+              className="mt-6 bg-green-600 text-white px-4 py-2 rounded w-full font-semibold"
+              onClick={handleGenerateSheet}
+              disabled={sheetLoading}>
+              {sheetLoading
+                ? 'Generating Nutrient Sheet...'
+                : 'Generate Nutrient Sheet'}
+            </button>
+            {sheetError && (
+              <div className="text-red-500 mt-2">{sheetError}</div>
+            )}
+          </div>
+        )}
+        {nutrientSheet && <NutrientSheet data={nutrientSheet} />}
+      </div>
     </div>
   );
 };
