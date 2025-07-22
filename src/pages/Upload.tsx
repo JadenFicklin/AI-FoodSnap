@@ -176,28 +176,6 @@ const Upload: React.FC = () => {
         </div>
       )}
       {nutrientSheet && <NutrientSheet data={nutrientSheet} />}
-      {nutrientSheetRaw && (
-        <div className="mt-4 p-4 border rounded bg-yellow-50 w-full max-w-2xl mx-auto">
-          <h2 className="font-semibold mb-2 text-yellow-800">
-            Nutrient Sheet Raw Response:
-          </h2>
-          <pre className="text-xs whitespace-pre-wrap text-yellow-900">
-            {JSON.stringify(nutrientSheetRaw, null, 2)}
-          </pre>
-        </div>
-      )}
-      {result && (
-        <div className="mt-4 p-4 border rounded bg-gray-100 w-full max-w-md">
-          <h2 className="font-semibold mb-2">Full Server Response:</h2>
-          <pre className="text-xs whitespace-pre-wrap">
-            {String(
-              typeof result === 'string'
-                ? result
-                : JSON.stringify(result, null, 2)
-            )}
-          </pre>
-        </div>
-      )}
     </div>
   );
 };
