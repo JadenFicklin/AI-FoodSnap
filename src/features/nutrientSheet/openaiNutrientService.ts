@@ -16,3 +16,15 @@ export async function getNutrientSheet(
   const data = await response.json();
   return data as NutrientSheetResult;
 }
+
+export async function generateMealName(
+  foods: { food: string; grams: number }[]
+): Promise<string> {
+  const response = await fetch(`${BACKEND_URL}/api/generate-meal-name`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ foods })
+  });
+  const data = await response.json();
+  return data.mealName;
+}

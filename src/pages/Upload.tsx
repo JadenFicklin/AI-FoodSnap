@@ -1,8 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { getNutrientSheet } from '../features/nutrientSheet/openaiNutrientService';
+import {
+  getNutrientSheet,
+  generateMealName
+} from '../features/nutrientSheet/openaiNutrientService';
 import NutrientSheet from '../features/nutrientSheet/NutrientSheet';
+import LoadingAnimation from '../components/LoadingAnimation';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserData } from '../services/firebase';
+import { getUserData, saveMealData } from '../services/firebase';
 
 function parseFoods(raw: string | object) {
   if (Array.isArray(raw)) return raw;
@@ -61,6 +65,9 @@ const Upload: React.FC = () => {
     setError(null);
     setResult(null);
     setFoods([]);
+    setNutrientSheet(null);
+    setNutrientSheetRaw(null);
+    setSheetError(null);
     if (!file) {
       setError('Please select an image.');
       return;
@@ -86,6 +93,11 @@ const Upload: React.FC = () => {
         foodsData = parseFoods(data.foods.raw);
       }
       setFoods(foodsData);
+
+      // Automatically generate nutrient sheet if foods are detected
+      if (foodsData.length > 0) {
+        await generateNutrientSheet(foodsData);
+      }
     } catch (err) {
       setError('An error occurred while uploading.');
     } finally {
@@ -93,21 +105,53 @@ const Upload: React.FC = () => {
     }
   };
 
-  const handleGenerateSheet = async () => {
+  const generateNutrientSheet = async (foodsData: any[]) => {
     setSheetError(null);
     setSheetLoading(true);
     setNutrientSheet(null);
     setNutrientSheetRaw(null);
     try {
-      const result = await getNutrientSheet(foods);
-      console.log('Nutrient sheet response:', result);
-      setNutrientSheet(result);
-      setNutrientSheetRaw(result);
+      // Generate nutrient sheet first
+      const nutrientResult = await getNutrientSheet(foodsData);
+      console.log('Nutrient sheet response:', nutrientResult);
+
+      setNutrientSheet(nutrientResult);
+      setNutrientSheetRaw(nutrientResult);
+
+      // Try to generate meal name, but don't fail if it doesn't work
+      let mealName = 'Custom Meal';
+      try {
+        mealName = await generateMealName(foodsData);
+        console.log('Meal name:', mealName);
+      } catch (mealNameError) {
+        console.warn(
+          'Failed to generate meal name, using default:',
+          mealNameError
+        );
+      }
+
+      // Save meal data to Firebase
+      if (user?.uid) {
+        const mealData = {
+          mealName: mealName,
+          foods: foodsData,
+          nutrients: nutrientResult,
+          uploadTime: new Date().toISOString()
+        };
+
+        await saveMealData(user.uid, mealData);
+        console.log('Meal data saved to Firebase');
+      }
     } catch (err) {
+      console.error('Error generating nutrient sheet:', err);
       setSheetError('Failed to generate nutrient sheet.');
     } finally {
       setSheetLoading(false);
     }
+  };
+
+  const handleGenerateSheet = async () => {
+    await generateNutrientSheet(foods);
   };
 
   // Fetch user data when component mounts
@@ -195,15 +239,24 @@ const Upload: React.FC = () => {
               className="hidden"
             />
           </div>
-          <button
-            type="submit"
-            className="bg-blue-500 text-white px-4 py-2 rounded w-full"
-            disabled={loading}>
-            {loading ? 'Uploading...' : 'Upload'}
-          </button>
+          {!loading && (
+            <button
+              type="submit"
+              className="bg-blue-500 text-white px-4 py-2 rounded w-full hover:bg-blue-600 transition-colors"
+              disabled={loading}>
+              Upload & Analyze
+            </button>
+          )}
         </form>
+
+        {loading && (
+          <div className="mt-6">
+            <LoadingAnimation message="Analyzing your food image..." />
+          </div>
+        )}
+
         {error && <div className="text-red-500 mt-4">{String(error)}</div>}
-        {foods && foods.length > 0 && (
+        {foods && foods.length > 0 && !loading && (
           <div className="mt-6 w-full max-w-md">
             <h2 className="font-semibold text-lg mb-4">Detected Foods</h2>
             <div className="grid grid-cols-1 gap-4">
@@ -220,16 +273,27 @@ const Upload: React.FC = () => {
                 </div>
               ))}
             </div>
-            <button
-              className="mt-6 bg-green-600 text-white px-4 py-2 rounded w-full font-semibold"
-              onClick={handleGenerateSheet}
-              disabled={sheetLoading}>
-              {sheetLoading
-                ? 'Generating Nutrient Sheet...'
-                : 'Generate Nutrient Sheet'}
-            </button>
+
+            {sheetLoading && (
+              <div className="mt-6">
+                <LoadingAnimation message="Analyzing nutrients in your food..." />
+              </div>
+            )}
+
             {sheetError && (
-              <div className="text-red-500 mt-2">{sheetError}</div>
+              <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div className="text-red-800 text-sm">
+                  <p className="font-medium">
+                    Failed to generate nutrient analysis
+                  </p>
+                  <p className="mt-1">{sheetError}</p>
+                  <button
+                    onClick={handleGenerateSheet}
+                    className="mt-3 px-4 py-2 bg-red-600 text-white rounded text-sm hover:bg-red-700 transition-colors">
+                    Try Again
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}

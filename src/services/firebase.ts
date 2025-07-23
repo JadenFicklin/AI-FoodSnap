@@ -62,13 +62,6 @@ export const signUp = async (
       lastLogin: new Date().toISOString()
     });
 
-    // Store username mapping for availability checking
-    const usernameRef = dbRef(realtimeDb, `usernames/${username}`);
-    await set(usernameRef, {
-      uid: userCredential.user.uid,
-      createdAt: new Date().toISOString()
-    });
-
     return userCredential.user;
   } catch (error) {
     throw error;
@@ -90,20 +83,8 @@ export const deleteAccount = async () => {
       throw new Error('No user is currently signed in');
     }
 
-    // Get user data to find username
-    const userRef = dbRef(realtimeDb, `users/${user.uid}`);
-    const userSnapshot = await get(userRef);
-
-    if (userSnapshot.exists()) {
-      const userData = userSnapshot.val();
-      if (userData.username) {
-        // Delete username mapping
-        const usernameRef = dbRef(realtimeDb, `usernames/${userData.username}`);
-        await remove(usernameRef);
-      }
-    }
-
     // Delete user data from Realtime Database
+    const userRef = dbRef(realtimeDb, `users/${user.uid}`);
     await remove(userRef);
 
     // Delete user authentication account
@@ -131,6 +112,22 @@ export const getUserData = async (uid: string) => {
   }
 };
 
+export const saveMealData = async (uid: string, mealData: any) => {
+  try {
+    const mealId = Date.now().toString(); // Use timestamp as unique ID
+    const mealRef = dbRef(realtimeDb, `users/${uid}/meals/${mealId}`);
+    await set(mealRef, {
+      ...mealData,
+      createdAt: new Date().toISOString(),
+      mealId: mealId
+    });
+    return mealId;
+  } catch (error) {
+    console.error('Error saving meal data:', error);
+    throw error;
+  }
+};
+
 export const onAuthChange = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
 };
@@ -139,9 +136,21 @@ export const checkUsernameAvailability = async (
   username: string
 ): Promise<boolean> => {
   try {
-    const usernameRef = dbRef(realtimeDb, `usernames/${username}`);
-    const snapshot = await get(usernameRef);
-    return !snapshot.exists();
+    // Query all users to check if username exists
+    const usersRef = dbRef(realtimeDb, 'users');
+    const snapshot = await get(usersRef);
+
+    if (snapshot.exists()) {
+      const users = snapshot.val();
+      // Check if any user has this username
+      for (const uid in users) {
+        if (users[uid].username === username) {
+          return false; // Username is taken
+        }
+      }
+    }
+
+    return true; // Username is available
   } catch (error) {
     console.error('Error checking username availability:', error);
     return false;
